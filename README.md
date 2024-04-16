@@ -66,10 +66,9 @@ If you find our code or paper useful, please cite
 If you find the regularizations useful, please kindly cite
 ```
 @article{Huang2DGS2024,
-    author={Binbin Huang and Zehao Yu and Anpei Chen and Andreas Geiger and Shenghua Gao},
-    title={2D Gaussian Splatting for Geometrically Accurate Radiance Fields},
-    journal={arXiv},
-    volume={2403.17888},
-    year={2024}
+  title={2D Gaussian Splatting for Geometrically Accurate Radiance Fields},
+  author={Huang, Binbin and Yu, Zehao and Chen, Anpei and Geiger, Andreas and Gao, Shenghua},
+  journal={arXiv preprint arXiv:2403.17888},
+  year={2024}
 }
 ```
