@@ -9,7 +9,7 @@
     <a href="http://www.cvlibs.net/">Andreas Geiger</a>
 
   </p>
-  <h3 align="center"><a href="https://drive.google.com/file/d/19d7KFE3tjibippiB53OgpHadMnb0WT1I/view?usp=sharing">Paper</a> | <a href="https://arxiv.org/pdf/2311.16493.pdf">arXiv</a> | <a href="https://niujinshuchong.github.io/gaussian-opacity-fields/">Project Page</a>  </h3>
+  <h3 align="center"><a href="https://drive.google.com/file/d/13i3HeVBiqN8JXnwAzTvQrPz2rShxIhMv/view?usp=sharing">Paper</a> | <a href="https://arxiv.org/pdf/2311.16493.pdf">arXiv</a> | <a href="https://niujinshuchong.github.io/gaussian-opacity-fields/">Project Page</a>  </h3>
   <div align="center"></div>
 </p>
 
