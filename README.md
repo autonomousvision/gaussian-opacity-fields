@@ -9,7 +9,7 @@
     <a href="http://www.cvlibs.net/">Andreas Geiger</a>
 
   </p>
-  <h3 align="center"><a href="https://drive.google.com/file/d/13i3HeVBiqN8JXnwAzTvQrPz2rShxIhMv/view?usp=sharing">Paper</a> | <a href="https://arxiv.org/pdf/2311.16493.pdf">arXiv</a> | <a href="https://niujinshuchong.github.io/gaussian-opacity-fields/">Project Page</a>  </h3>
+  <h3 align="center"><a href="https://drive.google.com/file/d/13i3HeVBiqN8JXnwAzTvQrPz2rShxIhMv/view?usp=sharing">Paper</a> | <a href="https://arxiv.org/pdf/2404.10772.pdf">arXiv</a> | <a href="https://niujinshuchong.github.io/gaussian-opacity-fields/">Project Page</a>  </h3>
   <div align="center"></div>
 </p>
 
@@ -59,7 +59,7 @@ If you find our code or paper useful, please cite
 @article{Yu2024GOF,
   author    = {Yu, Zehao and Sattler, Torsten and Geiger, Andreas},
   title     = {Gaussian Opacity Fields: Efficient High-quality Compact Surface Reconstruction in Unbounded Scenes},
-  journal   = {arXiv},
+  journal   = {arXiv:2404.10772},
   year      = {2024},
 }
 ```
