@@ -41,17 +41,53 @@ pip install -r requirements.txt
 
 pip install submodules/diff-gaussian-rasterization
 pip install submodules/simple-knn/
+
+# tetra-nerf for triangulation
+cd submodules/tetra-triangulation
+conda install cmake
+conda install conda-forge::gmp
+conda install conda-forge::cgal
+cmake .
+make 
+pip install -e .
 ```
 
 # Dataset
 
-## Mip-NeRF 360 Dataset
-Please download the data from the [Mip-NeRF 360](https://jonbarron.info/mipnerf360/) and request the authors for the treehill and flowers scenes.
+Please download the Mip-NeRF 360 dataset from the [official webiste](https://jonbarron.info/mipnerf360/), the NeRF-Synthetic dataset from the [NeRF's official Google Drive](https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1), the preprocessed DTU dataset from [2DGS](https://surfsplatting.github.io/), the proprocessed Tanks and Temples dataset from [here](https://huggingface.co/datasets/ZehaoYu/gaussian-opacity-fields/tree/main). You need to download the ground truth point clouds from the [DTU dataset](https://roboimagedata.compute.dtu.dk/?page_id=36) and save to `dtu_eval/Offical_DTU_Dataset` to evaluate the geometry reconstruction. For the [Tanks and Temples](https://www.tanksandtemples.org/download/) dataset, you need to download the ground truth point clouds, alignments and cropfiles and save to `eval_tnt/TrainingSet`, such as `eval_tnt/TrainingSet/Caterpillar/Caterpillar.ply`.
 
-# Training and Evaluation Comming soon
+
+# Training and Evaluation
+```
+# you might need to update the data path in the script accordingly
+
+# NeRF-synthetic dataset
+python scripts/run_nerf_synthetic.py
+
+# Mip-NeRF 360 dataset
+python scripts/run_mipnerf360.py
+
+# Tanks and Temples dataset
+python scripts/run_tnt.py
+
+# DTU dataset
+python scripts/run_dtu.py
+```
+
+# Custom Dataset
+We use the same data format from 3DGS, please follow [here](https://github.com/graphdeco-inria/gaussian-splatting?tab=readme-ov-file#processing-your-own-scenes) to prepare the your dataset. Then you can train your model and extract a mesh (we use the Tanks and Temples dataset for example)
+```
+# training
+# -r 2 for using downsampled images with factor 2
+# --use_decoupled_appearance to enable decoupled appearance modeling if your images has changing lighting conditions
+python train.py -s TNT_GOF/TrainingSet/Caterpillar -m exp_TNT/Caterpillar -r 2 --use_decoupled_appearance
+
+# extract the mesh after training
+python extract_mesh.py -m exp_TNT/Caterpillar --iteration 30000
+```
 
 # Acknowledgements
-This project is built upon [3DGS](https://github.com/graphdeco-inria/gaussian-splatting) and [Mip-Splatting](https://github.com/autonomousvision/mip-splatting). Regularizations are taken from [2DGS](https://surfsplatting.github.io/). Tetrahedra triangulation is taken from [Tetra-NeRF](https://github.com/jkulhanek/tetra-nerf). Marching Tetrahdedra is adapted from [Kaolin](https://github.com/NVIDIAGameWorks/kaolin/blob/master/kaolin/ops/conversions/tetmesh.py) Library. We thank all the authors for their great work and repos. 
+This project is built upon [3DGS](https://github.com/graphdeco-inria/gaussian-splatting) and [Mip-Splatting](https://github.com/autonomousvision/mip-splatting). Regularizations and some visualizations are taken from [2DGS](https://surfsplatting.github.io/). Tetrahedra triangulation is taken from [Tetra-NeRF](https://github.com/jkulhanek/tetra-nerf). Marching Tetrahdedra is adapted from [Kaolin](https://github.com/NVIDIAGameWorks/kaolin/blob/master/kaolin/ops/conversions/tetmesh.py) Library. Evaluation scripts for DTU and Tanks and Temples dataset are taken from [DTUeval-python](https://github.com/jzhangbs/DTUeval-python) and [TanksAndTemples](https://github.com/isl-org/TanksAndTemples/tree/master/python_toolbox/evaluation) respectively. We thank all the authors for their great work and repos. 
 
 # Citation
 If you find our code or paper useful, please cite
