@@ -86,6 +86,9 @@ python train.py -s TNT_GOF/TrainingSet/Caterpillar -m exp_TNT/Caterpillar -r 2 -
 
 # extract the mesh after training
 python extract_mesh.py -m exp_TNT/Caterpillar --iteration 30000
+
+# you can open extracted mesh with meshlab or using the following script based on open3d
+python mesh_viewer.py exp_TNT/Caterpillar/test/ours_30000/fusion/mesh_binary_search_7.ply
 ```
 
 # Acknowledgements
@@ -103,10 +106,12 @@ If you find our code or paper useful, please cite
 ```
 If you find the regularizations useful, please kindly cite
 ```
-@article{Huang2DGS2024,
-  title={2D Gaussian Splatting for Geometrically Accurate Radiance Fields},
-  author={Huang, Binbin and Yu, Zehao and Chen, Anpei and Geiger, Andreas and Gao, Shenghua},
-  journal={arXiv preprint arXiv:2403.17888},
-  year={2024}
+@inproceedings{Huang2DGS2024,
+    title={2D Gaussian Splatting for Geometrically Accurate Radiance Fields},
+    author={Huang, Binbin and Yu, Zehao and Chen, Anpei and Geiger, Andreas and Gao, Shenghua},
+    publisher = {Association for Computing Machinery},
+    booktitle = {SIGGRAPH 2024 Conference Papers},
+    year      = {2024},
+    doi       = {10.1145/3641519.3657428}
 }
 ```
