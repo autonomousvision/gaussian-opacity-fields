@@ -990,7 +990,7 @@ integrateCUDA(
 				if (k == 0){
 					// Eq. (3) from 3D Gaussian splatting paper.
 					for (int ch = 0; ch < CHANNELS; ch++)
-						C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
+						C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * corner_Ts[k];
 				}
 							
 				// store maximal depth
@@ -999,7 +999,7 @@ integrateCUDA(
 				}
 
 				if (k == 0){
-					C[CHANNELS * 2 + 1] += alpha * T;
+					C[CHANNELS * 2 + 1] += alpha * corner_Ts[k];
 				}
 
 				corner_Ts[k] = test_T;
@@ -1028,11 +1028,11 @@ integrateCUDA(
 	// rendering data to the frame and auxiliary buffers.
 	if (inside)
 	{
-		final_T[pix_id] = T;
+		final_T[pix_id] = corner_Ts[0];
 		n_contrib[pix_id] = last_contributor;
 
 		for (int ch = 0; ch < CHANNELS; ch++)
-			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
+			out_color[ch * H * W + pix_id] = C[ch] + corner_Ts[0] * bg_color[ch];
 
 		// depth and alpha
 		out_color[DEPTH_OFFSET * H * W + pix_id] = C[CHANNELS * 2];
@@ -1251,7 +1251,7 @@ integrateCUDA(
 				out_alpha_integrated[projected_ids[k]] = point_alphas[k];
 				// write colors
 				for (int ch = 0; ch < CHANNELS; ch++)
-					out_color_integrated[CHANNELS * projected_ids[k] + ch] = C[ch] + T * bg_color[ch];;
+					out_color_integrated[CHANNELS * projected_ids[k] + ch] = C[ch] + corner_Ts[0] * bg_color[ch];;
 			}
 		}
 	}
