@@ -23,7 +23,7 @@ dry_run = False
 jobs = list(zip(scenes, factors))
 
 def train_scene(gpu, scene, factor):
-    cmd = f"CUDA_LAUNCH_BLOCKING=1 OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python train.py -s TNT_GOF/{split}/{scene} -m {output_dir}/{scene} --eval -r {factor} --use_decoupled_appearance"
+    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python train.py -s TNT_GOF/{split}/{scene} -m {output_dir}/{scene} --eval -r {factor} --use_decoupled_appearance"
     print(cmd)
     if not dry_run:
         os.system(cmd)
