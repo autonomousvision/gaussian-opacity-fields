@@ -162,41 +162,10 @@ __device__ void computeCov3D(const glm::vec3 scale, float mod, const glm::vec4 r
 	cov3D[5] = Sigma[2][2];
 }
 
-// Forward method for computing the inverse of the cov3D matrix
-__device__ void computeCov3DInv(const float* cov3D, const float* viewmatrix, float* inv_cov3D)
-{
-	// inv cov before applying J
-	glm::mat3 Vrk = glm::mat3(
-		cov3D[0], cov3D[1], cov3D[2],
-		cov3D[1], cov3D[3], cov3D[4],
-		cov3D[2], cov3D[4], cov3D[5]
-	);
-	
-	glm::mat3 W = glm::mat3(
-		viewmatrix[0], viewmatrix[4], viewmatrix[8],
-		viewmatrix[1], viewmatrix[5], viewmatrix[9],
-		viewmatrix[2], viewmatrix[6], viewmatrix[10]
-	);
-
-	glm::mat3 cov3D_view = glm::transpose(W) * glm::transpose(Vrk) * W;
-	glm::mat3 inv = glm::inverse(cov3D_view);
-
-    // inv_cov3D is in row-major order
-	// since inv is symmetric, row-major order is the same as column-major order
-	inv_cov3D[0] = inv[0][0];
-	inv_cov3D[1] = inv[0][1];
-	inv_cov3D[2] = inv[0][2];
-	inv_cov3D[3] = inv[1][0];
-	inv_cov3D[4] = inv[1][1];
-	inv_cov3D[5] = inv[1][2];
-	inv_cov3D[6] = inv[2][0];
-	inv_cov3D[7] = inv[2][1];
-	inv_cov3D[8] = inv[2][2];
-}
 
 // TODO combined with computeCov3D to avoid redundant computation
 // Forward method for creating a view to gaussian coordinate system transformation matrix
-__device__ void computeView2Gaussian(const float3& mean, const glm::vec4 rot, const float* viewmatrix,  float* view2gaussian)
+__device__ void computeView2Gaussian(const glm::vec3 scale, const float3& mean, const glm::vec4 rot, const float* viewmatrix,  float* view2gaussian)
 {
 	// glm matrices use column-major order
 	// Normalize quaternion to get valid rotation
@@ -212,10 +181,6 @@ __device__ void computeView2Gaussian(const float3& mean, const glm::vec4 rot, co
 		2.f * (x * y + r * z), 1.f - 2.f * (x * x + z * z), 2.f * (y * z - r * x),
 		2.f * (x * z - r * y), 2.f * (y * z + r * x), 1.f - 2.f * (x * x + y * y)
 	);
-
-	// transform 3D points in gaussian coordinate system to world coordinate system as follows
-	// new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
-	// so the rots is the gaussian to world transform
 
 	// Gaussian to world transform
 	glm::mat4 G2W = glm::mat4(
@@ -256,22 +221,61 @@ __device__ void computeView2Gaussian(const float3& mean, const glm::vec4 rot, co
 	glm::vec3 t = glm::vec3(G2V[3][0], G2V[3][1], G2V[3][2]);
 	glm::vec3 t2 = -R_transpose * t;
 
-	view2gaussian[0] = R_transpose[0][0];
-	view2gaussian[1] = R_transpose[0][1];
-	view2gaussian[2] = R_transpose[0][2];
-	view2gaussian[3] = 0.0f;
-	view2gaussian[4] = R_transpose[1][0];
-	view2gaussian[5] = R_transpose[1][1];
-	view2gaussian[6] = R_transpose[1][2];
-	view2gaussian[7] = 0.0f;
-	view2gaussian[8] = R_transpose[2][0];
-	view2gaussian[9] = R_transpose[2][1];
-	view2gaussian[10] = R_transpose[2][2];
-	view2gaussian[11] = 0.0f;
-	view2gaussian[12] = t2.x;
-	view2gaussian[13] = t2.y;
-	view2gaussian[14] = t2.z;
-	view2gaussian[15] = 1.0f;
+	// view2gaussian[0] = R_transpose[0][0];
+	// view2gaussian[1] = R_transpose[0][1];
+	// view2gaussian[2] = R_transpose[0][2];
+	// view2gaussian[3] = 0.0f;
+	// view2gaussian[4] = R_transpose[1][0];
+	// view2gaussian[5] = R_transpose[1][1];
+	// view2gaussian[6] = R_transpose[1][2];
+	// view2gaussian[7] = 0.0f;
+	// view2gaussian[8] = R_transpose[2][0];
+	// view2gaussian[9] = R_transpose[2][1];
+	// view2gaussian[10] = R_transpose[2][2];
+	// view2gaussian[11] = 0.0f;
+	// view2gaussian[12] = t2.x;
+	// view2gaussian[13] = t2.y;
+	// view2gaussian[14] = t2.z;
+	// view2gaussian[15] = 1.0f;
+
+
+    // precompute the value here to avoid repeated computations also reduce IO
+	// v is the viewdirection and v^T is the transpose of v
+	// t = position of the camera in the gaussian coordinate system
+	// A = v^T @ R^T @ S^-1 @ S^-1 @ R @ v
+	// B = t^T @ S^-1 @ S^-1 @ R @ v
+	// C = t^T @ S^-1 @ S^-1 @ t
+	// For the given caemra, t is fix and v depends on the pixel
+	// therefore we can precompute A, B, C and use them in the forward pass
+	// For A, we can precompute R^T @ S^-1 @ S^-1 @ R, which is a symmetric matrix and only store the upper triangle in 6 values
+	// For B, we can precompute S^-1 @ S^-1 @ R @ v, which is a vector and store it in 3 values
+	// and C is fixed, so we only need to store 1 value
+	// Therefore, we only need to store 10 values in the view2gaussian matrix
+	// S^-1 @ S^-1 is shared in A, B, C
+	float3 S_inv_square = {1.0f / (scale.x * scale.x + 1e-7), 1.0f / (scale.y * scale.y + 1e-7), 1.0f / (scale.z * scale.z + 1e-7)};
+	float C = t2.x * t2.x * S_inv_square.x + t2.y * t2.y * S_inv_square.y + t2.z * t2.z * S_inv_square.z;
+	glm::mat3 S_inv_square_R = glm::mat3(
+		S_inv_square.x * R_transpose[0][0], S_inv_square.y * R_transpose[0][1], S_inv_square.z * R_transpose[0][2],
+		S_inv_square.x * R_transpose[1][0], S_inv_square.y * R_transpose[1][1], S_inv_square.z * R_transpose[1][2],
+		S_inv_square.x * R_transpose[2][0], S_inv_square.y * R_transpose[2][1], S_inv_square.z * R_transpose[2][2]
+	); 
+
+	glm::vec3 B = t2 * S_inv_square_R;
+
+	glm::mat3 Sigma = glm::transpose(R_transpose) * S_inv_square_R;
+
+	// write to view2gaussian
+	view2gaussian[0] = Sigma[0][0];
+	view2gaussian[1] = Sigma[0][1];
+	view2gaussian[2] = Sigma[0][2];
+	view2gaussian[3] = Sigma[1][1];
+	view2gaussian[4] = Sigma[1][2];
+	view2gaussian[5] = Sigma[2][2];
+	view2gaussian[6] = B.x;
+	view2gaussian[7] = B.y;
+	view2gaussian[8] = B.z;
+	view2gaussian[9] = C;	
+	
 }
 
 
@@ -326,6 +330,10 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	float p_w = 1.0f / (p_hom.w + 0.0000001f);
 	float3 p_proj = { p_hom.x * p_w, p_hom.y * p_w, p_hom.z * p_w };
 
+	// access scale and rotation once to reduce IO
+	const glm::vec3 scale = scales[idx];
+	const glm::vec4 rot = rotations[idx];
+
 	// If 3D covariance matrix is precomputed, use it, otherwise compute
 	// from scaling and rotation parameters. 
 	const float* cov3D;
@@ -335,7 +343,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	}
 	else
 	{
-		computeCov3D(scales[idx], scale_modifier, rotations[idx], cov3Ds + idx * 6);
+		computeCov3D(scale, scale_modifier, rot, cov3Ds + idx * 6);
 		cov3D = cov3Ds + idx * 6;
 	}
 
@@ -388,7 +396,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	if (view2gaussian_precomp == nullptr)
 	{
 		// printf("view2gaussian_precomp is nullptr\n");
-		computeView2Gaussian(p_orig, rotations[idx], viewmatrix, view2gaussians + idx * 16);
+		computeView2Gaussian(scale, p_orig, rot, viewmatrix, view2gaussians + idx * 10);
 		
 	} else {
 		view2gaussian = view2gaussian_precomp + idx * 16;
@@ -447,8 +455,7 @@ renderCUDA(
 	// Allocate storage for batches of collectively fetched data.
 	__shared__ int collected_id[BLOCK_SIZE];
 	__shared__ float4 collected_conic_opacity[BLOCK_SIZE];
-	__shared__ float collected_view2gaussian[BLOCK_SIZE * 16]; // TODO we only need 12
-	__shared__ float3 collected_scale[BLOCK_SIZE];
+	__shared__ float collected_view2gaussian[BLOCK_SIZE * 10]; 
 
 	// Initialize helper variables
 	float T = 1.0f;
@@ -478,10 +485,8 @@ renderCUDA(
 			// collected_xy[block.thread_rank()] = points_xy_image[coll_id];
 			collected_conic_opacity[block.thread_rank()] = conic_opacity[coll_id];
 			// collected_depth[block.thread_rank()] = depths[coll_id];
-			for (int ii = 0; ii < 16; ii++)
-				collected_view2gaussian[16 * block.thread_rank() + ii] = view2gaussian[coll_id * 16 + ii];
-			
-			collected_scale[block.thread_rank()] = scales[coll_id];
+			for (int ii = 0; ii < 10; ii++)
+				collected_view2gaussian[10 * block.thread_rank() + ii] = view2gaussian[coll_id * 10 + ii];
 		}
 		block.sync();
 
@@ -496,35 +501,28 @@ renderCUDA(
 			// float2 xy = collected_xy[j];
 			// float2 d = { xy.x - pixf.x, xy.y - pixf.y };
 			float4 con_o = collected_conic_opacity[j];
-			float* view2gaussian_j = collected_view2gaussian + j * 16;
-			float3 scale_j = collected_scale[j];
+			float* view2gaussian_j = collected_view2gaussian + j * 10;
 			
 			float3 ray_point = { ray.x , ray.y, 1.0 };
 			
-			// transform camera center and ray to gaussian's local coordinate system
-			// current center is zero
-			float3 cam_pos_local = {view2gaussian_j[12], view2gaussian_j[13], view2gaussian_j[14]};
-			float3 ray_local = transformPoint4x3_without_t(ray_point, view2gaussian_j);
+			const float normal[3] = { view2gaussian_j[0] * ray.x + view2gaussian_j[1] * ray.y + view2gaussian_j[2], 
+									view2gaussian_j[1] * ray.x + view2gaussian_j[3] * ray.y + view2gaussian_j[4],
+									view2gaussian_j[2] * ray.x + view2gaussian_j[4] * ray.y + view2gaussian_j[5]};
 
-			// scale the ray_local and cam_pos_local
-			double3 ray_local_scaled = { ray_local.x / scale_j.x, ray_local.y / scale_j.y, ray_local.z / scale_j.z };
-			double3 cam_pos_local_scaled = { cam_pos_local.x / scale_j.x, cam_pos_local.y / scale_j.y, cam_pos_local.z / scale_j.z };
-
-			// compute the minimal value
 			// use AA, BB, CC so that the name is unique
-			double AA = ray_local_scaled.x * ray_local_scaled.x + ray_local_scaled.y * ray_local_scaled.y + ray_local_scaled.z * ray_local_scaled.z;
-			double BB = 2 * (ray_local_scaled.x * cam_pos_local_scaled.x + ray_local_scaled.y * cam_pos_local_scaled.y + ray_local_scaled.z * cam_pos_local_scaled.z);
-			double CC = cam_pos_local_scaled.x * cam_pos_local_scaled.x + cam_pos_local_scaled.y * cam_pos_local_scaled.y + cam_pos_local_scaled.z * cam_pos_local_scaled.z;
+			float AA = ray.x * normal[0] + ray.y * normal[1] + normal[2];
+			float BB = 2 * (view2gaussian_j[6] * ray_point.x + view2gaussian_j[7] * ray_point.y + view2gaussian_j[8]);
+			float CC = view2gaussian_j[9];
 
+			
 			// t is the depth of the gaussian
 			float t = -BB/(2*AA);
 			// depth must be positive otherwise it is not valid and we skip it
 			if (t <= NEAR_PLANE)
 				continue;
 
-			const float scale = 1.0f / sqrt(AA + 1e-7);
 			// the scale of the gaussian is 1.f / sqrt(AA)
-			double min_value = -(BB/AA) * (BB/4.) + CC;
+			float min_value = -(BB/AA) * (BB/4.) + CC;
 
 			float power = -0.5f * min_value;
 			if (power > 0.0f){
@@ -535,26 +533,11 @@ renderCUDA(
 			const float max_t = t;
 			const float mapped_max_t = (FAR_PLANE * max_t - FAR_PLANE * NEAR_PLANE) / ((FAR_PLANE - NEAR_PLANE) * max_t);
 			
-			// use ray_local_scaled as the normal direction
-			const float3 point_local_scaled_t = {-ray_local_scaled.x, -ray_local_scaled.y, -ray_local_scaled.z};
-
-			// here is the gradient at mode_t
-			float3 point_normal = { point_local_scaled_t.x / scale_j.x, point_local_scaled_t.y / scale_j.y, point_local_scaled_t.z / scale_j.z };
-
-			float length = sqrt(point_normal.x * point_normal.x + point_normal.y * point_normal.y + point_normal.z * point_normal.z + 1e-7);
-			// maybe we don't need to normalize? then it is the gradient of opacity
-			// but what is the scale?
-			point_normal = { point_normal.x / length, point_normal.y / length, point_normal.z / length };
-
-			// transform to world space
-			float3 transformed_normal = {
-				view2gaussian_j[0] * point_normal.x + view2gaussian_j[1] * point_normal.y + view2gaussian_j[2] * point_normal.z,
-				view2gaussian_j[4] * point_normal.x + view2gaussian_j[5] * point_normal.y + view2gaussian_j[6] * point_normal.z,
-				view2gaussian_j[8] * point_normal.x + view2gaussian_j[9] * point_normal.y + view2gaussian_j[10] * point_normal.z,
-			};
 			
-			const float normal[3] = { transformed_normal.x, transformed_normal.y, transformed_normal.z};
-			
+			// normalize normal
+			float length = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2] + 1e-7);
+			const float normal_normalized[3] = { -normal[0] / length, -normal[1] / length, -normal[2] / length };
+
 			// Eq. (2) from 3D Gaussian splatting paper.
 			// Obtain alpha by multiplying with Gaussian opacity
 			// and its exponential falloff from mean.
@@ -583,7 +566,7 @@ renderCUDA(
 			
 			// normal
 			for (int ch = 0; ch < CHANNELS; ch++)
-				C[CHANNELS + ch] += normal[ch] * alpha * T;
+				C[CHANNELS + ch] += normal_normalized[ch] * alpha * T;
 			
 			// depth and alpha
 			if (T > 0.5){
@@ -888,8 +871,7 @@ integrateCUDA(
 	__shared__ float2 collected_xy[BLOCK_SIZE];
 	__shared__ float4 collected_conic_opacity[BLOCK_SIZE]; // only need opacity
 	__shared__ float collected_depth[BLOCK_SIZE];
-	__shared__ float collected_view2gaussian[BLOCK_SIZE * 16]; // could use 12
-	__shared__ float3 collected_scale[BLOCK_SIZE];
+	__shared__ float collected_view2gaussian[BLOCK_SIZE * 10];
 
 	// Initialize helper variables
 	float T = 1.0f;
@@ -919,9 +901,8 @@ integrateCUDA(
 			int coll_id = gaussian_list[range.x + progress];
 			collected_id[block.thread_rank()] = coll_id;
 			collected_conic_opacity[block.thread_rank()] = conic_opacity[coll_id];
-			for (int ii = 0; ii < 16; ii++)
-				collected_view2gaussian[16 * block.thread_rank() + ii] = view2gaussian[coll_id * 16 + ii];
-			collected_scale[block.thread_rank()] = scales[coll_id];
+			for (int ii = 0; ii < 10; ii++)
+				collected_view2gaussian[10 * block.thread_rank() + ii] = view2gaussian[coll_id * 10 + ii];
 		}
 		block.sync();
 
@@ -936,36 +917,27 @@ integrateCUDA(
 			// float2 xy = collected_xy[j];
 			// float2 d = { xy.x - pixf.x, xy.y - pixf.y };
 			float4 con_o = collected_conic_opacity[j];
-			float* view2gaussian_j = collected_view2gaussian + j * 16;
-			float3 scale_j = collected_scale[j];
+			float* view2gaussian_j = collected_view2gaussian + j * 10;
 			
 			bool used = false;
 			for (int k = 0; k < 5; ++k){
 				float3 ray_point = { (pixf.x + offset_xs[k] - W/2.) / focal_x, (pixf.y + offset_ys[k] - H/2.) / focal_y, 1.0f };
 				
-				// transform camera center and ray to gaussian's local coordinate system
-				// current center is zero
-				float3 cam_pos_local = {view2gaussian_j[12], view2gaussian_j[13], view2gaussian_j[14]};
-				float3 ray_local = transformPoint4x3_without_t(ray_point, view2gaussian_j);
+				const float normal[3] = { view2gaussian_j[0] * ray_point.x + view2gaussian_j[1] * ray_point.y + view2gaussian_j[2], 
+									      view2gaussian_j[1] * ray_point.x + view2gaussian_j[3] * ray_point.y + view2gaussian_j[4],
+									      view2gaussian_j[2] * ray_point.x + view2gaussian_j[4] * ray_point.y + view2gaussian_j[5]};
 
-				// scale the ray_local and cam_pos_local
-				double3 ray_local_scaled = { ray_local.x / scale_j.x, ray_local.y / scale_j.y, ray_local.z / scale_j.z };
-				double3 cam_pos_local_scaled = { cam_pos_local.x / scale_j.x, cam_pos_local.y / scale_j.y, cam_pos_local.z / scale_j.z };
-
-				// compute the minimal value
 				// use AA, BB, CC so that the name is unique
-				double AA = ray_local_scaled.x * ray_local_scaled.x + ray_local_scaled.y * ray_local_scaled.y + ray_local_scaled.z * ray_local_scaled.z;
-				double BB = 2 * (ray_local_scaled.x * cam_pos_local_scaled.x + ray_local_scaled.y * cam_pos_local_scaled.y + ray_local_scaled.z * cam_pos_local_scaled.z);
-				double CC = cam_pos_local_scaled.x * cam_pos_local_scaled.x + cam_pos_local_scaled.y * cam_pos_local_scaled.y + cam_pos_local_scaled.z * cam_pos_local_scaled.z;
-
+				float AA = ray_point.x * normal[0] + ray_point.y * normal[1] + normal[2];
+				float BB = 2 * (view2gaussian_j[6] * ray_point.x + view2gaussian_j[7] * ray_point.y + view2gaussian_j[8]);
+				float CC = view2gaussian_j[9];
+				
 				// t is the depth of the gaussian
 				float t = -BB/(2*AA);
 				// depth must be positive otherwise it is not valid and we skip it
 				if (t <= NEAR_PLANE)
 					continue;
 				
-				const float scale = 1.0f / sqrt(AA + 1e-7);
-				// the scale of the gaussian is 1.f / sqrt(AA)
 				double min_value = -(BB/AA) * (BB/4.) + CC;
 
 				float power = -0.5f * min_value;
@@ -1160,10 +1132,8 @@ integrateCUDA(
 				int coll_id = gaussian_list[range.x + progress];
 				collected_id[block.thread_rank()] = coll_id;
 				collected_conic_opacity[block.thread_rank()] = conic_opacity[coll_id];
-				for (int ii = 0; ii < 16; ii++)
-					collected_view2gaussian[16 * block.thread_rank() + ii] = view2gaussian[coll_id * 16 + ii];
-				
-				collected_scale[block.thread_rank()] = scales[coll_id];
+				for (int ii = 0; ii < 10; ii++)
+					collected_view2gaussian[10 * block.thread_rank() + ii] = view2gaussian[coll_id * 10 + ii];
 
 			}
 			block.sync();
@@ -1183,8 +1153,8 @@ integrateCUDA(
 				}
 
 				float4 con_o = collected_conic_opacity[j];
-				float* view2gaussian_j = collected_view2gaussian + j * 16;
-				float3 scale_j = collected_scale[j];
+				float* view2gaussian_j = collected_view2gaussian + j * 10;
+				// float3 scale_j = collected_scale[j];
 				
 				// iterate over all projected points
 				for (int k = 0; k < num_projected; k++){
@@ -1192,20 +1162,14 @@ integrateCUDA(
 					float3 ray_point = { (projected_xy[k].x - W/2.) / focal_x, (projected_xy[k].y - H/2.) / focal_y, 1.0 };
 					float ray_depth = projected_depth[k];
 
-					// transform camera center and ray to gaussian's local coordinate system
-					// current center is zero
-					float3 cam_pos_local = {view2gaussian_j[12], view2gaussian_j[13], view2gaussian_j[14]};
-					float3 ray_local = transformPoint4x3_without_t(ray_point, view2gaussian_j);
+					const float normal[3] = { view2gaussian_j[0] * ray_point.x + view2gaussian_j[1] * ray_point.y + view2gaussian_j[2], 
+									          view2gaussian_j[1] * ray_point.x + view2gaussian_j[3] * ray_point.y + view2gaussian_j[4],
+									          view2gaussian_j[2] * ray_point.x + view2gaussian_j[4] * ray_point.y + view2gaussian_j[5]};
 
-					// scale the ray_local and cam_pos_local
-					double3 ray_local_scaled = { ray_local.x / scale_j.x, ray_local.y / scale_j.y, ray_local.z / scale_j.z };
-					double3 cam_pos_local_scaled = { cam_pos_local.x / scale_j.x, cam_pos_local.y / scale_j.y, cam_pos_local.z / scale_j.z };
-
-					// compute the minimal value
 					// use AA, BB, CC so that the name is unique
-					double AA = ray_local_scaled.x * ray_local_scaled.x + ray_local_scaled.y * ray_local_scaled.y + ray_local_scaled.z * ray_local_scaled.z;
-					double BB = 2 * (ray_local_scaled.x * cam_pos_local_scaled.x + ray_local_scaled.y * cam_pos_local_scaled.y + ray_local_scaled.z * cam_pos_local_scaled.z);
-					double CC = cam_pos_local_scaled.x * cam_pos_local_scaled.x + cam_pos_local_scaled.y * cam_pos_local_scaled.y + cam_pos_local_scaled.z * cam_pos_local_scaled.z;
+					float AA = ray_point.x * normal[0] + ray_point.y * normal[1] + normal[2];
+					float BB = 2 * (view2gaussian_j[6] * ray_point.x + view2gaussian_j[7] * ray_point.y + view2gaussian_j[8]);
+					float CC = view2gaussian_j[9];
 
 					// take the maximal if reached
 					// t is the depth of the gaussian
@@ -1213,14 +1177,8 @@ integrateCUDA(
 					if (t > ray_depth){
 						t = ray_depth;
 					}
-
-					const float3 current_point = {ray_point.x * t, ray_point.y * t, t};
-
-					float3 point_local = transformPoint4x3(current_point, view2gaussian_j);
 					
-					float3 point_local_scaled = { point_local.x / scale_j.x, point_local.y / scale_j.y, point_local.z / scale_j.z };
-					float power = -0.5f * (point_local_scaled.x * point_local_scaled.x + point_local_scaled.y * point_local_scaled.y + point_local_scaled.z * point_local_scaled.z);
-
+					float power = -0.5f * (AA * t * t + BB * t + CC);
 					float alpha = min(0.99f, con_o.w * exp(power));
 
 					// TODO check here
