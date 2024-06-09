@@ -496,10 +496,6 @@ renderCUDA(
 			// Keep track of current position in range
 			contributor++;
 
-			// Resample using conic matrix (cf. "Surface 
-			// Splatting" by Zwicker et al., 2001)
-			// float2 xy = collected_xy[j];
-			// float2 d = { xy.x - pixf.x, xy.y - pixf.y };
 			float4 con_o = collected_conic_opacity[j];
 			float* view2gaussian_j = collected_view2gaussian + j * 10;
 			
