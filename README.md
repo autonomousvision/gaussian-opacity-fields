@@ -105,7 +105,7 @@ If you find our code or paper useful, please cite
 }
 ```
 If you find the regularizations useful, please kindly cite
-```
+```bibtex
 @inproceedings{Huang2DGS2024,
     title={2D Gaussian Splatting for Geometrically Accurate Radiance Fields},
     author={Huang, Binbin and Yu, Zehao and Chen, Anpei and Geiger, Andreas and Gao, Shenghua},
