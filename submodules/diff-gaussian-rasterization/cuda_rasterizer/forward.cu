@@ -505,15 +505,16 @@ renderCUDA(
 			
 			float3 ray_point = { ray.x , ray.y, 1.0 };
 			
-			const float normal[3] = { view2gaussian_j[0] * ray.x + view2gaussian_j[1] * ray.y + view2gaussian_j[2], 
-									view2gaussian_j[1] * ray.x + view2gaussian_j[3] * ray.y + view2gaussian_j[4],
-									view2gaussian_j[2] * ray.x + view2gaussian_j[4] * ray.y + view2gaussian_j[5]};
+			const float normal[3] = { 
+				view2gaussian_j[0] * ray_point.x + view2gaussian_j[1] * ray_point.y + view2gaussian_j[2], 
+				view2gaussian_j[1] * ray_point.x + view2gaussian_j[3] * ray_point.y + view2gaussian_j[4],
+				view2gaussian_j[2] * ray_point.x + view2gaussian_j[4] * ray_point.y + view2gaussian_j[5]
+			};
 
 			// use AA, BB, CC so that the name is unique
 			double AA = ray.x * normal[0] + ray.y * normal[1] + normal[2];
 			double BB = 2 * (view2gaussian_j[6] * ray_point.x + view2gaussian_j[7] * ray_point.y + view2gaussian_j[8]);
 			float CC = view2gaussian_j[9];
-
 			
 			// t is the depth of the gaussian
 			float t = -BB/(2*AA);
@@ -528,16 +529,7 @@ renderCUDA(
 			if (power > 0.0f){
 				power = 0.0f;
 			}
-
-			// NDC mapping is taken from 2DGS paper, please check here https://arxiv.org/pdf/2403.17888.pdf
-			const float max_t = t;
-			const float mapped_max_t = (FAR_PLANE * max_t - FAR_PLANE * NEAR_PLANE) / ((FAR_PLANE - NEAR_PLANE) * max_t);
 			
-			
-			// normalize normal
-			float length = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2] + 1e-7);
-			const float normal_normalized[3] = { -normal[0] / length, -normal[1] / length, -normal[2] / length };
-
 			// Eq. (2) from 3D Gaussian splatting paper.
 			// Obtain alpha by multiplying with Gaussian opacity
 			// and its exponential falloff from mean.
@@ -551,6 +543,14 @@ renderCUDA(
 				done = true;
 				continue;
 			}
+
+			// NDC mapping is taken from 2DGS paper, please check here https://arxiv.org/pdf/2403.17888.pdf
+			const float max_t = t;
+			const float mapped_max_t = (FAR_PLANE * max_t - FAR_PLANE * NEAR_PLANE) / ((FAR_PLANE - NEAR_PLANE) * max_t);
+			
+			// normalize normal
+			float length = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2] + 1e-7);
+			const float normal_normalized[3] = { -normal[0] / length, -normal[1] / length, -normal[2] / length };
 
 			// distortion loss is taken from 2DGS paper, please check https://arxiv.org/pdf/2403.17888.pdf
 			float A = 1-T;

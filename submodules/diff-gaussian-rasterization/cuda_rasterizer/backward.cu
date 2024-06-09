@@ -457,8 +457,6 @@ __device__ void computeView2Gaussian_backward(
 	// glm::mat3 Sigma = glm::transpose(R_transpose) * S_inv_square_R;
 	glm::mat3 dL_dS_inv_square_R = R_transpose * dL_dSigma + glm::outerProduct(t2, dL_dB); //TODO: check if this is correct
 	glm::mat3 dL_dR_transpose = glm::transpose(dL_dSigma * glm::transpose(S_inv_square_R));
-
-	const int idx_test = 0;
 	
 	// glm::mat3 S_inv_square_R = glm::mat3(
 	// 	S_inv_square.x * R_transpose[0][0], S_inv_square.y * R_transpose[0][1], S_inv_square.z * R_transpose[0][2],
@@ -775,12 +773,14 @@ renderCUDA(
 			
 			float3 ray_point = { ray.x , ray.y, 1.0 };
 
-			const float normal[3] = { view2gaussian_j[0] * ray.x + view2gaussian_j[1] * ray.y + view2gaussian_j[2], 
-									view2gaussian_j[1] * ray.x + view2gaussian_j[3] * ray.y + view2gaussian_j[4],
-									view2gaussian_j[2] * ray.x + view2gaussian_j[4] * ray.y + view2gaussian_j[5]};
+			const float normal[3] = { 
+				view2gaussian_j[0] * ray_point.x + view2gaussian_j[1] * ray_point.y + view2gaussian_j[2], 
+				view2gaussian_j[1] * ray_point.x + view2gaussian_j[3] * ray_point.y + view2gaussian_j[4],
+				view2gaussian_j[2] * ray_point.x + view2gaussian_j[4] * ray_point.y + view2gaussian_j[5]
+			};
 
 			// use AA, BB, CC so that the name is unique
-			double AA = ray.x * normal[0] + ray.y * normal[1] + normal[2];
+			double AA = ray_point.x * normal[0] + ray_point.y * normal[1] + normal[2];
 			double BB = 2 * (view2gaussian_j[6] * ray_point.x + view2gaussian_j[7] * ray_point.y + view2gaussian_j[8]);
 			float CC = view2gaussian_j[9];
 			
@@ -797,6 +797,12 @@ renderCUDA(
 				power = 0.0f;
 			}
 
+			const float G = exp(power);
+			const float alpha = min(0.99f, con_o.w * G);
+			// const float alpha = min(0.99f, con_o.w * value);
+			if (alpha < 1.0f / 255.0f)
+				continue;
+
 			// NDC mapping is taken from 2DGS paper, please check here https://arxiv.org/pdf/2403.17888.pdf
 			const float max_t = t;
 			const float mapped_max_t = (FAR_PLANE * max_t - FAR_PLANE * NEAR_PLANE) / ((FAR_PLANE - NEAR_PLANE) * max_t);
@@ -806,12 +812,6 @@ renderCUDA(
 			// normalize normal
 			float length = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2] + 1e-7);
 			const float normal_normalized[3] = { -normal[0] / length, -normal[1] / length, -normal[2] / length};
-
-			const float G = exp(power);
-			const float alpha = min(0.99f, con_o.w * G);
-			// const float alpha = min(0.99f, con_o.w * value);
-			if (alpha < 1.0f / 255.0f)
-				continue;
 
 			T = T / (1.f - alpha);
 			const float dchannel_dcolor = alpha * T;
@@ -857,26 +857,23 @@ renderCUDA(
 			// propagate the current weight W_{i} to next weight W_{i-1}
 			last_dL_dT = dL_dweight * alpha + (1 - alpha) * last_dL_dT;
 			
-			float dL_dnormal_reg[3] = {0};
+			float dL_dnormal_normalized[3] = {0};
 			// // Propagate gradients to per-Gaussian normals
 			for (int ch = 0; ch < 3; ch++) {
 				accum_normal_rec[ch] = last_alpha * last_normal[ch] + (1.f - last_alpha) * accum_normal_rec[ch];
 				last_normal[ch] = normal_normalized[ch];
 				dL_dalpha += (normal_normalized[ch] - accum_normal_rec[ch]) * dL_dnormal2D[ch];
-				dL_dnormal_reg[ch] = alpha * T * dL_dnormal2D[ch];
+				dL_dnormal_normalized[ch] = alpha * T * dL_dnormal2D[ch];
 			}
-			float dL_dnormal_normalized_x = dL_dnormal_reg[0];
-			float dL_dnormal_normalized_y = dL_dnormal_reg[1];
-			float dL_dnormal_normalized_z = dL_dnormal_reg[2];
 			
 			// float length = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2] + 1e-7);
 			// const float normal_normalized[3] = { -normal[0] / length, -normal[1] / length, -normal[2] / length};
-			float dL_dlength = (dL_dnormal_normalized_x * normal[0] + dL_dnormal_normalized_y * normal[1] + dL_dnormal_normalized_z * normal[2]);
+			float dL_dlength = (dL_dnormal_normalized[0] * normal[0] + dL_dnormal_normalized[1] * normal[1] + dL_dnormal_normalized[2] * normal[2]);
 			dL_dlength *= 1.f / (length * length);
 			float dL_dnormal[3] = {
-				(-dL_dnormal_normalized_x + dL_dlength * normal[0]) / length,
-				(-dL_dnormal_normalized_y + dL_dlength * normal[1]) / length,
-				(-dL_dnormal_normalized_z + dL_dlength * normal[2]) / length
+				(-dL_dnormal_normalized[0] + dL_dlength * normal[0]) / length,
+				(-dL_dnormal_normalized[1] + dL_dlength * normal[1]) / length,
+				(-dL_dnormal_normalized[2] + dL_dlength * normal[2]) / length
 			};
 			
 			dL_dt = dL_dmax_t;
@@ -942,25 +939,17 @@ renderCUDA(
 			dL_dnormal[1] += dL_dA * ray.y;
 			dL_dnormal[2] += dL_dA;
 			
-			float dL_dview2gaussian_j[10] = {
-				dL_dnormal[0] * ray.x,                         // 0
-				dL_dnormal[0] * ray.y + dL_dnormal[1] * ray.x, // 1
-				dL_dnormal[0] + dL_dnormal[2] * ray.x,         // 2
-				dL_dnormal[1] * ray.y,                         // 3
-				dL_dnormal[1] + dL_dnormal[2] * ray.y,         // 4
-				dL_dnormal[2],                                 // 5
-				dL_dB * 2 * ray.x,                             // 6
-				dL_dB * 2 * ray.y,                             // 7
-				dL_dB * 2,                                     // 8
-				dL_dC,                                         // 9
-			};
-
-			// write the gradients to global memory
-			for (int ii = 0; ii < 10; ii++)
-			{
-				atomicAdd(&(dL_dview2gaussian[global_id * 10 + ii]), dL_dview2gaussian_j[ii]);
-			}
-
+			// write the gradients to global memory directly
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 0]), dL_dnormal[0] * ray.x);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 1]), dL_dnormal[0] * ray.y + dL_dnormal[1] * ray.x);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 2]), dL_dnormal[0] + dL_dnormal[2] * ray.x);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 3]), dL_dnormal[1] * ray.y);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 4]), dL_dnormal[1] + dL_dnormal[2] * ray.y);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 5]), dL_dnormal[2]);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 6]), dL_dB * 2 * ray.x);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 7]), dL_dB * 2 * ray.y);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 8]), dL_dB * 2);
+			atomicAdd(&(dL_dview2gaussian[global_id * 10 + 9]), dL_dC);
 		}
 	}
 }
