@@ -252,8 +252,8 @@ __device__ void computeView2Gaussian(const glm::vec3 scale, const float3& mean, 
 	// and C is fixed, so we only need to store 1 value
 	// Therefore, we only need to store 10 values in the view2gaussian matrix
 	// S^-1 @ S^-1 is shared in A, B, C
-	float3 S_inv_square = {1.0f / (scale.x * scale.x + 1e-7), 1.0f / (scale.y * scale.y + 1e-7), 1.0f / (scale.z * scale.z + 1e-7)};
-	float C = t2.x * t2.x * S_inv_square.x + t2.y * t2.y * S_inv_square.y + t2.z * t2.z * S_inv_square.z;
+	double3 S_inv_square = {1.0f / ((double)scale.x * scale.x + 1e-7), 1.0f / ((double)scale.y * scale.y + 1e-7), 1.0f / ((double)scale.z * scale.z + 1e-7)};
+	double C = t2.x * t2.x * S_inv_square.x + t2.y * t2.y * S_inv_square.y + t2.z * t2.z * S_inv_square.z;
 	glm::mat3 S_inv_square_R = glm::mat3(
 		S_inv_square.x * R_transpose[0][0], S_inv_square.y * R_transpose[0][1], S_inv_square.z * R_transpose[0][2],
 		S_inv_square.x * R_transpose[1][0], S_inv_square.y * R_transpose[1][1], S_inv_square.z * R_transpose[1][2],
@@ -510,8 +510,8 @@ renderCUDA(
 									view2gaussian_j[2] * ray.x + view2gaussian_j[4] * ray.y + view2gaussian_j[5]};
 
 			// use AA, BB, CC so that the name is unique
-			float AA = ray.x * normal[0] + ray.y * normal[1] + normal[2];
-			float BB = 2 * (view2gaussian_j[6] * ray_point.x + view2gaussian_j[7] * ray_point.y + view2gaussian_j[8]);
+			double AA = ray.x * normal[0] + ray.y * normal[1] + normal[2];
+			double BB = 2 * (view2gaussian_j[6] * ray_point.x + view2gaussian_j[7] * ray_point.y + view2gaussian_j[8]);
 			float CC = view2gaussian_j[9];
 
 			
@@ -522,7 +522,7 @@ renderCUDA(
 				continue;
 
 			// the scale of the gaussian is 1.f / sqrt(AA)
-			float min_value = -(BB/AA) * (BB/4.) + CC;
+			double min_value = -(BB/AA) * (BB/4.) + CC;
 
 			float power = -0.5f * min_value;
 			if (power > 0.0f){
