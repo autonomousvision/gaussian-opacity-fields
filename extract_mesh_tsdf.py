@@ -45,12 +45,22 @@ def tsdf_fusion(model_path, name, iteration, views, gaussians, pipeline, backgro
             
             depth[(alpha < alpha_thres)] = 0
             
-            intrinsic=o3d.camera.PinholeCameraIntrinsic(width=view.image_width, 
-                    height=view.image_height, 
-                    cx = view.image_width/2,
-                    cy = view.image_height/2,
-                    fx = view.image_width / (2 * math.tan(view.FoVx / 2.)),
-                    fy = view.image_height / (2 * math.tan(view.FoVy / 2.)))
+            W = view.image_width
+            H = view.image_height
+            ndc2pix = torch.tensor([
+                [W / 2, 0, 0, (W-1) / 2],
+                [0, H / 2, 0, (H-1) / 2],
+                [0, 0, 0, 1]]).float().cuda().T
+            intrins =  (view.projection_matrix @ ndc2pix)[:3,:3].T
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(
+                width=W,
+                height=H,
+                cx = intrins[0,2].item(),
+                cy = intrins[1,2].item(), 
+                fx = intrins[0,0].item(), 
+                fy = intrins[1,1].item()
+            )
+            
             extrinsic = np.asarray((view.world_view_transform.T).cpu().numpy())
             
             o3d_color = o3d.t.geometry.Image(np.asarray(rgb.permute(1,2,0).cpu().numpy(), order="C"))
