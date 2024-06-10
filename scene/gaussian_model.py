@@ -196,7 +196,20 @@ class GaussianModel:
         
         # transpose view2gaussian to match glm in CUDA code
         V2G = V2G.transpose(2, 1).contiguous()
-        return V2G
+        
+        # precompute results to reduce computation and IO
+        scales = self.get_scaling_with_3D_filter
+        S_inv_square = 1.0 / (scales ** 2)
+        R = V2G[:, :3, :3].transpose(1, 2)
+        t2 = V2G[:, 3:, :3]
+        
+        C = torch.sum((t2 ** 2) * S_inv_square[:, None, :], dim=2)
+        S_inv_square_R = S_inv_square[:, :, None] * R
+        B = t2 @ S_inv_square_R
+        Sigma = R.transpose(1, 2) @ S_inv_square_R
+        merged = torch.cat([Sigma[:, :, 0], Sigma[:, 1:, 1], Sigma[:, 2:, 2], B.squeeze(), C], dim=1)
+        
+        return merged
 
     @torch.no_grad()
     def compute_3D_filter(self, cameras):

@@ -162,7 +162,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         # depth distortion regularization
         distortion_map = rendering[8, :, :]
-        distortion_map = get_edge_aware_distortion_map(gt_image, distortion_map)
+        # edge aware regularization is not really helpful so we disable it
+        # distortion_map = get_edge_aware_distortion_map(gt_image, distortion_map)
         distortion_loss = distortion_map.mean()
         
         # depth normal consistency
@@ -189,7 +190,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         iter_end.record()
 
-        is_save_images = True
+        is_save_images = False # default to not save images
         if is_save_images and (iteration % opt.densification_interval == 0):
             with torch.no_grad():
                 eval_cam = allCameras[random.randint(0, len(allCameras) -1)]

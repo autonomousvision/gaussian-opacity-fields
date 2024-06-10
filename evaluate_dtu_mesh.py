@@ -130,13 +130,13 @@ def cull_mesh(cameras, mesh):
     mesh.update_faces(face_mask)
     
     # Taking the biggest connected component
-    print("Taking the biggest connected component")
-    components = mesh.split(only_watertight=False)
-    areas = np.array([c.area for c in components], dtype=np.float32)
-    mesh_clean = components[areas.argmax()]
+    # print("Taking the biggest connected component")
+    # components = mesh.split(only_watertight=False)
+    # areas = np.array([c.area for c in components], dtype=np.float32)
+    # mesh_clean = components[areas.argmax()]
 
-    return mesh_clean
-
+    # return mesh_clean
+    return mesh
 
 def evaluate_mesh(dataset : ModelParams, iteration : int, DTU_PATH : str):
     

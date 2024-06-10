@@ -167,7 +167,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
   torch::Tensor dL_dsh = torch::zeros({P, M, 3}, means3D.options());
   torch::Tensor dL_dscales = torch::zeros({P, 3}, means3D.options());
   torch::Tensor dL_drotations = torch::zeros({P, 4}, means3D.options());
-  torch::Tensor dL_dview2gaussian = torch::zeros({P, 4, 4}, means3D.options()); // could 12
+  torch::Tensor dL_dview2gaussian = torch::zeros({P, 10}, means3D.options());
   
   if(P != 0)
   {  
