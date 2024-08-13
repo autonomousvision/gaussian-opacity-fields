@@ -8,9 +8,10 @@ def depths_to_points(view, depthmap):
     W, H = view.image_width, view.image_height
     fx = W / (2 * math.tan(view.FoVx / 2.))
     fy = H / (2 * math.tan(view.FoVy / 2.))
+    
     intrins = torch.tensor(
-        [[fx, 0., W/2.],
-        [0., fy, H/2.],
+        [[fx, 0., view.cx],
+        [0., fy, view.cy],
         [0., 0., 1.0]]
     ).float().cuda()
     grid_x, grid_y = torch.meshgrid(torch.arange(W, device='cuda').float() + 0.5, torch.arange(H, device='cuda').float() + 0.5, indexing='xy')

@@ -74,6 +74,8 @@ class _RasterizeGaussians(torch.autograd.Function):
             raster_settings.projmatrix,
             raster_settings.tanfovx,
             raster_settings.tanfovy,
+            raster_settings.cx,
+            raster_settings.cy,
             raster_settings.kernel_size,
             raster_settings.subpixel_offset,
             raster_settings.image_height,
@@ -125,6 +127,8 @@ class _RasterizeGaussians(torch.autograd.Function):
                 raster_settings.projmatrix, 
                 raster_settings.tanfovx, 
                 raster_settings.tanfovy, 
+                raster_settings.cx,
+                raster_settings.cy,
                 raster_settings.kernel_size,
                 raster_settings.subpixel_offset,
                 grad_out_color, 
@@ -169,6 +173,8 @@ class GaussianRasterizationSettings(NamedTuple):
     image_width: int 
     tanfovx : float
     tanfovy : float
+    cx : float
+    cy : float
     kernel_size : float
     subpixel_offset: torch.Tensor
     bg : torch.Tensor
@@ -279,6 +285,8 @@ class GaussianRasterizer(nn.Module):
             raster_settings.projmatrix,
             raster_settings.tanfovx,
             raster_settings.tanfovy,
+            raster_settings.cx,
+            raster_settings.cy,
             raster_settings.kernel_size,
             raster_settings.subpixel_offset,
             raster_settings.image_height,
