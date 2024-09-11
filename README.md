@@ -1,6 +1,6 @@
 <p align="center">
 
-  <h1 align="center">Gaussian Opacity Fields: Efficient and Compact Surface Reconstruction in Unbounded Scenes</h1>
+  <h1 align="center">Gaussian Opacity Fields: Efficient Adaptive Surface Reconstruction in Unbounded Scenes</h1>
   <p align="center">
     <a href="https://niujinshuchong.github.io/">Zehao Yu</a>
     ·
@@ -9,6 +9,10 @@
     <a href="http://www.cvlibs.net/">Andreas Geiger</a>
 
   </p>
+
+  <h2 align="center">SIGGRAPH ASIA 2024</h2>
+  <h2 align="center">(ACM Transactions on Graphics)</h2>
+
   <h3 align="center"><a href="https://drive.google.com/file/d/13i3HeVBiqN8JXnwAzTvQrPz2rShxIhMv/view?usp=sharing">Paper</a> | <a href="https://arxiv.org/pdf/2404.10772.pdf">arXiv</a> | <a href="https://niujinshuchong.github.io/gaussian-opacity-fields/">Project Page</a>  </h3>
   <div align="center"></div>
 </p>
@@ -25,6 +29,8 @@ Gaussian Opacity Fields (GOF) enables geometry extraction with 3D Gaussians dire
 <br>
 
 # Updates
+
+* **[2024.09.11]**: GOF is accepted to SIGGRAPH ASIA 2024 Journal Track. We updated paper with more details, explanations, and ablations.
 
 * **[2024.06.10]**: 🔥 Improve the training speed by 2x with [merged operations](https://github.com/autonomousvision/gaussian-opacity-fields/pull/58). 6 scenes in TNT dataset can be trained in ~24 mins and the bicycle scene in the Mip-NeRF 360 dataset can be trained in ~45 mins. Please pull the latest code and reinstall with `pip install submodules/diff-gaussian-rasterization` to use it.
 
@@ -102,8 +108,8 @@ If you find our code or paper useful, please cite
 ```bibtex
 @article{Yu2024GOF,
   author    = {Yu, Zehao and Sattler, Torsten and Geiger, Andreas},
-  title     = {Gaussian Opacity Fields: Efficient High-quality Compact Surface Reconstruction in Unbounded Scenes},
-  journal   = {arXiv:2404.10772},
+  title     = {Gaussian Opacity Fields: Efficient Adaptive Surface Reconstruction in Unbounded Scenes},
+  journal   = {ACM Transactions on Graphics},
   year      = {2024},
 }
 ```
