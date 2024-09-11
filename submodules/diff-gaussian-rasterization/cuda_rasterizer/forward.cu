@@ -411,8 +411,9 @@ __global__ void __launch_bounds__(BLOCK_X * BLOCK_Y)
 renderCUDA(
 	const uint2* __restrict__ ranges,
 	const uint32_t* __restrict__ point_list,
-	int W, int H,
-	float focal_x, float focal_y,
+	const int W, const int H,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
 	const float2* __restrict__ subpixel_offset,
 	const float2* __restrict__ points_xy_image,
 	const float* __restrict__ features,
@@ -445,7 +446,7 @@ renderCUDA(
 	bool done = !inside;
 
 	// create the ray
-	float2 ray = { (pixf.x - W/2.) / focal_x, (pixf.y - H/2.) / focal_y };
+	float2 ray = { (pixf.x - cx) / focal_x, (pixf.y - cy) / focal_y };
 
 	// Load start/end range of IDs to process in bit sorted list.
 	uint2 range = ranges[block.group_index().y * horizontal_blocks + block.group_index().x];
@@ -615,8 +616,9 @@ void FORWARD::render(
 	const dim3 grid, dim3 block,
 	const uint2* ranges,
 	const uint32_t* point_list,
-	int W, int H,
-	float focal_x, float focal_y,
+	const int W, const int H,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
 	const float2* subpixel_offset,
 	const float2* means2D,
 	const float* colors,
@@ -639,6 +641,7 @@ void FORWARD::render(
 		point_list,
 		W, H,
 		focal_x, focal_y,
+		cx, cy,
 		subpixel_offset,
 		means2D,
 		colors,
@@ -671,9 +674,10 @@ void FORWARD::preprocess(int P, int D, int M,
 	const float* viewmatrix,
 	const float* projmatrix,
 	const glm::vec3* cam_pos,
-	const int W, int H,
-	const float focal_x, float focal_y,
-	const float tan_fovx, float tan_fovy,
+	const int W, const int H,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
+	const float tan_fovx, const float tan_fovy,
 	const float kernel_size,
 	int* radii,
 	float2* means2D,
@@ -725,9 +729,10 @@ __global__ void preprocessPointsCUDA(int P, int D, int M,
 	const float* viewmatrix,
 	const float* projmatrix,
 	const glm::vec3* cam_pos,
-	const int W, int H,
-	const float tan_fovx, float tan_fovy,
-	const float focal_x, float focal_y,
+	const int W, const int H,
+	const float tan_fovx, const float tan_fovy,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
 	float2* points2D,
 	float* depths,
 	const dim3 grid,
@@ -753,7 +758,7 @@ __global__ void preprocessPointsCUDA(int P, int D, int M,
 	float p_w = 1.0f / (p_hom.w + 0.0000001f);
 	float3 p_proj = { p_hom.x * p_w, p_hom.y * p_w, p_hom.z * p_w };
 
-	float2 point_image = {focal_x * p_view.x / (p_view.z + 0.0000001f) + W/2., focal_y * p_view.y / (p_view.z + 0.0000001f) + H/2.};
+	float2 point_image = {focal_x * p_view.x / (p_view.z + 0.0000001f) + cx, focal_y * p_view.y / (p_view.z + 0.0000001f) + cy};
 
 	// If the point is outside the image, quit.
 	if (point_image.x < 0 || point_image.x >= W || point_image.y < 0 || point_image.y >= H)
@@ -770,9 +775,10 @@ void FORWARD::preprocess_points(int PN, int D, int M,
 		const float* viewmatrix,
 		const float* projmatrix,
 		const glm::vec3* cam_pos,
-		const int W, int H,
-		const float focal_x, float focal_y,
-		const float tan_fovx, float tan_fovy,
+		const int W, const int H,
+		const float focal_x, const float focal_y,
+		const float cx, const float cy,
+		const float tan_fovx, const float tan_fovy,
 		float2* points2D,
 		float* depths,
 		const dim3 grid,
@@ -788,6 +794,7 @@ void FORWARD::preprocess_points(int PN, int D, int M,
 		W, H,
 		tan_fovx, tan_fovy,
 		focal_x, focal_y,
+		cx, cy,
 		points2D,
 		depths,
 		grid,
@@ -807,8 +814,9 @@ integrateCUDA(
 	const uint2* __restrict__ point_ranges,
 	const uint32_t* __restrict__ gaussian_list,
 	const uint32_t* __restrict__ point_list,
-	int W, int H,
-	float focal_x, float focal_y,
+	const int W, const int H,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
 	const float2* __restrict__ subpixel_offset,
 	const float2* __restrict__ points2D,
 	const float* __restrict__ features,
@@ -845,7 +853,7 @@ integrateCUDA(
 	const float depth_input = inside ? subpixel_offset[pix_id].x : 0.0f;
 
 	// create the ray
-	float2 ray = { (pixf.x - W/2.) / focal_x, (pixf.y - H/2.) / focal_y };
+	float2 ray = { (pixf.x - cx) / focal_x, (pixf.y - cy) / focal_y };
 
 	// Load start/end range of IDs to process in bit sorted list.
 	uint2 range = gaussian_ranges[block.group_index().y * horizontal_blocks + block.group_index().x];
@@ -917,7 +925,7 @@ integrateCUDA(
 			
 			bool used = false;
 			for (int k = 0; k < 5; ++k){
-				float3 ray_point = { (pixf.x + offset_xs[k] - W/2.) / focal_x, (pixf.y + offset_ys[k] - H/2.) / focal_y, 1.0f };
+				float3 ray_point = { (pixf.x + offset_xs[k] - cx) / focal_x, (pixf.y + offset_ys[k] - cy) / focal_y, 1.0f };
 				
 				const float normal[3] = { view2gaussian_j[0] * ray_point.x + view2gaussian_j[1] * ray_point.y + view2gaussian_j[2], 
 									      view2gaussian_j[1] * ray_point.x + view2gaussian_j[3] * ray_point.y + view2gaussian_j[4],
@@ -1155,7 +1163,7 @@ integrateCUDA(
 				// iterate over all projected points
 				for (int k = 0; k < num_projected; k++){
 					// create the ray
-					float3 ray_point = { (projected_xy[k].x - W/2.) / focal_x, (projected_xy[k].y - H/2.) / focal_y, 1.0 };
+					float3 ray_point = { (projected_xy[k].x - cx) / focal_x, (projected_xy[k].y - cy) / focal_y, 1.0 };
 					float ray_depth = projected_depth[k];
 
 					const float normal[3] = { view2gaussian_j[0] * ray_point.x + view2gaussian_j[1] * ray_point.y + view2gaussian_j[2], 
@@ -1223,8 +1231,9 @@ void FORWARD::integrate(
 	const uint2* point_ranges,
 	const uint32_t* gaussian_list,
 	const uint32_t* point_list,
-	int W, int H,
-	float focal_x, float focal_y,
+	const int W, const int H,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
 	const float2* subpixel_offset,
 	const float2* points2D,
 	const float* colors,
@@ -1251,6 +1260,7 @@ void FORWARD::integrate(
 		point_list,
 		W, H,
 		focal_x, focal_y,
+		cx, cy,
 		subpixel_offset,
 		points2D,
 		colors,

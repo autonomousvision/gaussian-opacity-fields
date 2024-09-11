@@ -636,8 +636,9 @@ __global__ void __launch_bounds__(BLOCK_X * BLOCK_Y)
 renderCUDA(
 	const uint2* __restrict__ ranges,
 	const uint32_t* __restrict__ point_list,
-	int W, int H,
-	float focal_x, float focal_y,
+	const int W, const int H,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
 	const float2* __restrict__ subpixel_offset,
 	const float* __restrict__ bg_color,
 	const float2* __restrict__ points_xy_image,
@@ -679,7 +680,7 @@ renderCUDA(
 	int toDo = range.y - range.x;
 
 	// create the ray
-	float2 ray = { (pixf.x - W/2.) / focal_x, (pixf.y - H/2.) / focal_y };
+	float2 ray = { (pixf.x - cx) / focal_x, (pixf.y - cy) / focal_y };
 
 	__shared__ int collected_id[BLOCK_SIZE];
 	__shared__ float2 collected_xy[BLOCK_SIZE];
@@ -968,6 +969,7 @@ void BACKWARD::preprocess(
 	const float* viewmatrix,
 	const float* projmatrix,
 	const float focal_x, float focal_y,
+	const float cx, const float cy,
 	const float tan_fovx, float tan_fovy,
 	const float kernel_size,
 	const glm::vec3* campos,
@@ -1036,8 +1038,9 @@ void BACKWARD::render(
 	const dim3 grid, const dim3 block,
 	const uint2* ranges,
 	const uint32_t* point_list,
-	int W, int H,
-	float focal_x, float focal_y,
+	const int W, const int H,
+	const float focal_x, const float focal_y,
+	const float cx, const float cy,
 	const float2* subpixel_offset,
 	const float* bg_color,
 	const float2* means2D,
@@ -1066,6 +1069,7 @@ void BACKWARD::render(
 		point_list,
 		W, H,
 		focal_x, focal_y,
+		cx, cy,
 		subpixel_offset,
 		bg_color,
 		means2D,
