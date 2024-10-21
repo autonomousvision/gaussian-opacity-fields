@@ -980,7 +980,7 @@ integrateCUDA(
 				// pixel.
 				last_contributor = contributor;
 
-				contributed_ids[n_contrib_local] = (u_int16_t)contributor;
+				contributed_ids[n_contrib_local] = (uint16_t)contributor;
 				n_contrib_local += 1;
 
 				if (n_contrib_local >= MAX_NUM_CONTRIBUTORS * 4){
@@ -1142,7 +1142,7 @@ integrateCUDA(
 					second_done = true;
 					continue;
 				}
-				if (num_iterated != (u_int32_t)contributed_ids[num_contributed_second]){
+				if (num_iterated != (uint32_t)contributed_ids[num_contributed_second]){
 					continue;
 				} else{
 					num_contributed_second += 1;
