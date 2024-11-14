@@ -40,7 +40,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
     makedirs(render_path, exist_ok=True)
     
     # generate tetra points here
-    points, points_scale = gaussians.get_tetra_points()
+    points, points_scale = gaussians.get_tetra_points(views)
     # load cell if exists
     if os.path.exists(os.path.join(render_path, "cells.pt")):
         print("load existing cells")

@@ -23,6 +23,54 @@ from utils.general_utils import strip_symmetric, build_scaling_rotation
 import trimesh
 from utils.vis_utils import save_points
 from scene.appearance_network import AppearanceNetwork
+from scene.cameras import Camera
+from einops import einsum
+
+
+@torch.no_grad()
+def get_frustum_mask(points: torch.Tensor, cameras: list[Camera], near: float = 0.2, far: float = 5.0):
+    H, W = cameras[0].image_height, cameras[0].image_width
+
+    intrinsics = torch.stack(
+        [
+            torch.Tensor(
+                [[cam.focal_x, 0, W / 2],
+                 [0, cam.focal_y, H / 2],
+                 [0, 0, 1]]
+            ) for cam in cameras
+        ], 
+        dim=0
+    ).to(points.device)
+
+    # full_proj_matrices: (n_view, 4, 4)
+    view_matrices = torch.stack(
+        [cam.world_view_transform for cam in cameras], dim=0
+    ).transpose(1, 2)
+
+    ones = torch.ones_like(points[:, 0]).unsqueeze(-1)
+    # homo_points: (N, 4)
+    homo_points = torch.cat([points, ones], dim=-1)
+
+    # uv_points: (n_view, N, 4, 4)
+    # Apply batch matrix multiplication to get uv_points for all cameras
+    view_points = einsum(view_matrices, homo_points, "n_view b c, N c -> n_view N b")
+    view_points = view_points[:, :, :3]
+
+    uv_points = einsum(intrinsics, view_points, "n_view b c, n_view N c -> n_view N b")
+
+    z = uv_points[:, :, -1:]
+    uv_points = uv_points[:, :, :2] / z
+    u, v = uv_points[:, :, 0], uv_points[:, :, 1]
+
+    # Optionally, we can apply near-far culling
+    # Apply near-far culling
+    depth = view_points[:, :, -1]
+    cull_near_fars = (depth >= near) & (depth <= far)
+
+    # Apply frustum mask
+    mask = torch.any(cull_near_fars & (u >= 0) & (u <= W-1) & (v >= 0) & (v <= H-1), dim=0)
+    return mask
+
 
 class GaussianModel:
 
@@ -380,9 +428,9 @@ class GaussianModel:
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
-    
+
     @torch.no_grad()
-    def get_tetra_points(self):
+    def get_tetra_points(self, views: list[Camera]):
         M = trimesh.creation.box()
         M.vertices *= 2
         
@@ -410,7 +458,9 @@ class GaussianModel:
         scale_corner = scale.repeat(1, 8).reshape(-1, 1)
         vertices_scale = torch.cat([scale_corner, scale], dim=0)
         
-        return vertices, vertices_scale
+        # Mask out vertices outside of context views
+        vertex_mask = get_frustum_mask(vertices, views)
+        return vertices[vertex_mask], vertices_scale[vertex_mask]
     
     def reset_opacity(self):
         # reset opacity to by considering 3D filter
