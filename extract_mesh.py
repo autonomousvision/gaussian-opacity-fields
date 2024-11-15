@@ -34,13 +34,13 @@ def evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size, 
     return alpha
 
 @torch.no_grad()
-def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, gaussians, pipeline, background, kernel_size, filter_mesh : bool, texture_mesh : bool):
+def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, gaussians, pipeline, background, kernel_size, filter_mesh : bool, texture_mesh : bool, near : float, far : float):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "fusion")
 
     makedirs(render_path, exist_ok=True)
     
     # generate tetra points here
-    points, points_scale = gaussians.get_tetra_points(views)
+    points, points_scale = gaussians.get_tetra_points(views, near, far)
     # load cell if exists
     if os.path.exists(os.path.join(render_path, "cells.pt")):
         print("load existing cells")
@@ -126,7 +126,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
     # mesh.export(os.path.join(render_path, f"mesh_binary_search_interp.ply"))
     
 
-def extract_mesh(dataset : ModelParams, iteration : int, pipeline : PipelineParams, filter_mesh : bool, texture_mesh : bool):
+def extract_mesh(dataset : ModelParams, iteration : int, pipeline : PipelineParams, filter_mesh : bool, texture_mesh : bool, near : float, far : float):
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
@@ -138,7 +138,7 @@ def extract_mesh(dataset : ModelParams, iteration : int, pipeline : PipelinePara
         kernel_size = dataset.kernel_size
         
         cams = scene.getTrainCameras()
-        marching_tetrahedra_with_binary_search(dataset.model_path, "test", iteration, cams, gaussians, pipeline, background, kernel_size, filter_mesh, texture_mesh)
+        marching_tetrahedra_with_binary_search(dataset.model_path, "test", iteration, cams, gaussians, pipeline, background, kernel_size, filter_mesh, texture_mesh, near, far)
 
 if __name__ == "__main__":
     # Set up command line argument parser
@@ -149,6 +149,9 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--filter_mesh", action="store_true")
     parser.add_argument("--texture_mesh", action="store_true")
+    parser.add_argument("--near", default=0.02, type=float)
+    parser.add_argument("--far", default=1e6, type=float)
+    
     args = get_combined_args(parser)
     print("Rendering " + args.model_path)
     
@@ -157,4 +160,4 @@ if __name__ == "__main__":
     torch.manual_seed(0)
     torch.cuda.set_device(torch.device("cuda:0"))
     
-    extract_mesh(model.extract(args), args.iteration, pipeline.extract(args), args.filter_mesh, args.texture_mesh)
+    extract_mesh(model.extract(args), args.iteration, pipeline.extract(args), args.filter_mesh, args.texture_mesh, args.near, args.far)

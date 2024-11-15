@@ -5,3 +5,4 @@ GPUtil
 opencv-python
 lpips
 trimesh
+einops

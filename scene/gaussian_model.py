@@ -25,10 +25,10 @@ from utils.vis_utils import save_points
 from scene.appearance_network import AppearanceNetwork
 from scene.cameras import Camera
 from einops import einsum
-
+from typing import List
 
 @torch.no_grad()
-def get_frustum_mask(points: torch.Tensor, cameras: list[Camera], near: float = 0.2, far: float = 5.0):
+def get_frustum_mask(points: torch.Tensor, cameras: List[Camera], near: float = 0.02, far: float = 1e6):
     H, W = cameras[0].image_height, cameras[0].image_width
 
     intrinsics = torch.stack(
@@ -430,7 +430,7 @@ class GaussianModel:
         PlyData([el]).write(path)
 
     @torch.no_grad()
-    def get_tetra_points(self, views: list[Camera]):
+    def get_tetra_points(self, views: List[Camera], near: float = 0.02, far: float = 1e6):
         M = trimesh.creation.box()
         M.vertices *= 2
         
@@ -459,7 +459,7 @@ class GaussianModel:
         vertices_scale = torch.cat([scale_corner, scale], dim=0)
         
         # Mask out vertices outside of context views
-        vertex_mask = get_frustum_mask(vertices, views)
+        vertex_mask = get_frustum_mask(vertices, views, near, far)
         return vertices[vertex_mask], vertices_scale[vertex_mask]
     
     def reset_opacity(self):
